@@ -75,12 +75,67 @@ class B(object):
 				continue
 			if self._is_cornered(conn):
 				self._remove_cluster(conn)
-				return
 		if self._is_cornered(last_move_clust):
 			self._remove_cluster(last_move_clust)
 	def __str__(self):
 		lookup = {'':' ','b':'x','w':'o'}
 		table = [[lookup[self._getij(i,j)] for j in range(self.s)] for i in range(self.s)]
-		return '|'+'|\n|'.join(['|'.join(x) for x in table])+'|'
+		string = '  '+' '.join([str(x%10) for x in range(self.s)])+'\n'
+		string += '%s|'+'|\n%s|'.join(['|'.join(x) for x in table])+'|'
+		string = string%tuple([x%10 for x in range(self.s)])
+		return string
 	def __repr__(self):
 		return self.__str__()
+
+class Go(object):
+	def __init__(self,size=19,ai=False):
+		self.ai = ai
+		self.b = B(size)
+		if ai: self._ai = AI(self.b)
+		self.start()
+	def _play(self,ai):
+		if not ai:
+			coords = raw_input()
+			i,j = self._parse_coords(coords)
+			i=int(i)
+			j=int(j)
+			return (i,j)
+		else:
+			decision = self._ai.decide('w')
+			print 'AI plays %s,%s'%decision
+			return decision
+	def _parse_coords(self,coords):
+		i,j = coords.split(',')
+		return (i,j)
+	def start(self):
+		print 'GO'
+		curr_player = 0
+		player_lookup = {0:'b',1:'w'}
+		while(True):
+			print self.b
+			not_moved = True
+			print '\nPlayer %s?'%str(curr_player+1)
+			while(True):
+				try:
+					i,j = self._play(self.ai and curr_player)
+				except ValueError:
+					print 'Invalid entry. Use the format: x,y'
+					continue
+				try:
+					self.b[i,j] = player_lookup[curr_player]
+					break
+				except AssertionError:
+					print 'Invalid move'
+					continue
+
+			print '\n'
+			curr_player=(curr_player+1)%2
+
+import random
+
+class AI(object):
+	def __init__(self,board):
+		self._board = board
+	def decide(self,color):
+		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
+		return random.choice(available)
