@@ -91,7 +91,7 @@ class Go(object):
 	def __init__(self,size=19,ai=False):
 		self.ai = ai
 		self.b = B(size)
-		if ai: self._ai = AI(self.b)
+		if ai: self._ai = AISimple(self.b)
 		self.start()
 	def _play(self,ai):
 		if not ai:
@@ -133,9 +133,63 @@ class Go(object):
 
 import random
 
+COL_TO_INT = {'b':0,'w':1}
+INT_TO_COL = {0:'b',1:'w'}
+
+debug_ai = False
+
+def get_clusters(b,col):
+	clusters = []
+	remaining_cells = [(i,j) for i in range(b.s) for j in range(b.s)]
+	while remaining_cells:
+		curr = remaining_cells[0]
+		if b[curr] != col:
+			remaining_cells.pop(0)
+			continue
+		conn = b._get_connections(*curr)
+		for c in conn:
+			remaining_cells.pop(remaining_cells.index(c))
+		clusters.append(conn)
+	return clusters
+
+def heuristic(b,col,weights = [1.,1.,2.]):
+	col_int = COL_TO_INT[col]
+	own_clusters = get_clusters(b,col)
+	other_clusters = get_clusters(b,INT_TO_COL[(col_int+1)%2])
+	own_neighbours = set([item for sublist in [b._get_cluster_neighbours(c) for c in own_clusters] for item in sublist])
+	other_neighbours = set([item for sublist in [b._get_cluster_neighbours(c) for c in other_clusters] for item in sublist])
+	n_clusters_own = float(len(own_clusters))
+	n_clusters_other = float(len(other_clusters))
+	n_own = float(len(reduce(lambda x,y:x+y,own_clusters,[])))
+	n_other = float(len(reduce(lambda x,y:x+y,other_clusters,[])))
+	n_liberties_own = float(len(own_neighbours))
+	n_liberties_other = float(len(other_neighbours))
+	return weights[0]*n_clusters_other/n_clusters_own + weights[1]*n_own/n_other + weights[2]*n_liberties_own/n_liberties_other
+
 class AI(object):
 	def __init__(self,board):
 		self._board = board
 	def decide(self,color):
 		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
 		return random.choice(available)
+
+class AISimple(AI):
+	def decide(self,color):
+		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
+		best_move = available[0]
+		max_h = -1
+		for c in available:
+			temp_board = B(self._board.s)
+			temp_board.b = self._board.b[:]
+			temp_board[c] = color
+			h = heuristic(temp_board,color)
+			if debug_ai:
+				print 'Evaluating move:'
+				print temp_board
+				print 'Heuristic:'
+				print h
+			if h>max_h:
+				max_h = h
+				best_move = c
+		print max_h
+		return best_move
