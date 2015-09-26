@@ -154,23 +154,48 @@ def get_clusters(b,col,loose=False):
 		if b[curr] != col:
 			remaining_cells.pop(0)
 			continue
-		conn = b._get_connections(*curr,loose=loose)
+		conn = b._get_conn_rec(curr[0],curr[1],col,loose=loose) #._get_connections(*curr,loose=loose)
 		for c in conn:
 			remaining_cells.pop(remaining_cells.index(c))
 		clusters.append(conn)
 	return clusters
 
+def get_eyes(b,col,loose=False):
+	empty_clusters = get_clusters(b,'')
+	small_empty_clusters = [c for c in empty_clusters if len(c)<=3]
+	cluster_neighbours = [set([b[n] for n in b._get_cluster_neighbours(c)]) for c in small_empty_clusters]
+	eyes = [c for c,n in zip(small_empty_clusters,cluster_neighbours) if len(n)==1 and n.pop()==col]
+	return eyes
+
 def scal(x,y):
 	return sum([a*b for a,b in zip(x,y)])
 
-def heuristic(b,col,weights = [0.5,1.5,1.,2.],ret_features=False):
+WEIGHTS = {
+	'n_clusters_own':-1.5,
+	'n_clusters_other':1.5,
+	'n_loose_clusters_own':-1.5,
+	'n_loose_clusters_other':1.5,
+	'n_own':1.,
+	'n_other':-1.,
+	'n_liberties_own':1.5,
+	'n_liberties_other':-1.5,
+	'n_own_eyes':3.,
+	'n_other_eyes':-3.,
+}
+
+#TODO: add feature corresponding to number of clusters with only one liberty
+
+def heuristic(b,col,weights = WEIGHTS,ret_features=False):
 	col_int = COL_TO_INT[col]
+	other_col = INT_TO_COL[(col_int+1)%2]
 	own_clusters = get_clusters(b,col)
-	other_clusters = get_clusters(b,INT_TO_COL[(col_int+1)%2])
+	other_clusters = get_clusters(b,other_col)
 	own_loose_clusters = get_clusters(b,col,loose=True)
-	other_loose_clusters = get_clusters(b,INT_TO_COL[(col_int+1)%2],loose=True)
+	other_loose_clusters = get_clusters(b,other_col,loose=True)
 	own_neighbours = set([item for sublist in [b._get_cluster_neighbours(c) for c in own_clusters] for item in sublist])
 	other_neighbours = set([item for sublist in [b._get_cluster_neighbours(c) for c in other_clusters] for item in sublist])
+	own_eyes = get_eyes(b,col)
+	other_eyes = get_eyes(b,other_col)
 	n_clusters_own = float(len(own_clusters))
 	n_clusters_other = float(len(other_clusters))
 	n_loose_clusters_own = float(len(own_loose_clusters))
@@ -179,8 +204,25 @@ def heuristic(b,col,weights = [0.5,1.5,1.,2.],ret_features=False):
 	n_other = float(len(reduce(lambda x,y:x+y,other_clusters,[])))
 	n_liberties_own = float(len(own_neighbours))
 	n_liberties_other = float(len(other_neighbours))
-	features = [n_clusters_other/n_clusters_own,n_loose_clusters_other/n_loose_clusters_own,n_own/n_other,n_liberties_own/n_liberties_other]
-	result = scal(weights,features)
+	n_own_eyes = float(len(own_eyes))
+	n_other_eyes = float(len(other_eyes))
+	features = {
+		'n_clusters_own':n_clusters_own,
+		'n_clusters_other':n_clusters_other,
+		'n_loose_clusters_own':n_loose_clusters_own,
+		'n_loose_clusters_other':n_loose_clusters_other,
+		'n_own':n_own,
+		'n_other':n_other,
+		'n_liberties_own':n_liberties_own,
+		'n_liberties_other':n_liberties_other,
+		'n_own_eyes':n_own_eyes,
+		'n_other_eyes':n_other_eyes,
+	}
+	# features = [n_clusters_other/n_clusters_own,n_loose_clusters_other/n_loose_clusters_own,n_own/n_other,n_liberties_own/n_liberties_other,n_own_eyes,n_other_eyes]
+
+	# features = [n_clusters_other,n_clusters_own,n_loose_clusters_other,n_loose_clusters_own,n_own,n_other,n_liberties_own,n_liberties_other,n_own_eyes,n_other_eyes]
+	# result = scal(weights,features)
+	result = sum([f*weights[k] for k,f in features.items()])
 	if ret_features:
 		return (result,features)
 	return result
@@ -196,7 +238,7 @@ class AISimple(AI):
 	def decide(self,color):
 		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
 		best_move = available[0]
-		max_h = -1
+		max_h = -1e30
 		for c in available:
 			temp_board = B(self._board.s)
 			temp_board.b = self._board.b[:]
