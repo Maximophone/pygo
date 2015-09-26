@@ -21,11 +21,11 @@ class B(object):
 		self._setij(*t,value=value)
 		self._last_move = t
 		self._update()
-	def _get_connections(self,i,j):
+	def _get_connections(self,i,j,loose=False):
 		col = self._getij(i,j)
 		if col=='': return None
-		return self._get_conn_rec(i,j,col)
-	def _get_conn_rec(self,i,j,col,checked=None):
+		return self._get_conn_rec(i,j,col,loose=loose)
+	def _get_conn_rec(self,i,j,col,checked=None,loose=False):
 		if not checked: checked=[]
 		curr = self._getij(i,j)
 		conn = []
@@ -33,11 +33,11 @@ class B(object):
 		checked.append((i,j))
 		if curr!=col: return []
 		conn.append((i,j))
-		neighbours = self._get_neighbours(i,j)
+		neighbours = self._get_neighbours_loose(i,j) if loose else self._get_neighbours(i,j)
 		for n in neighbours:
 			if n in checked: continue
 			if self._getij(*n)==curr:
-				conn+=self._get_conn_rec(n[0],n[1],col,checked=checked)
+				conn+=self._get_conn_rec(n[0],n[1],col,checked=checked,loose=loose)
 		return conn
 	def _get_neighbours(self,i,j):
 		neighbours = []
@@ -45,6 +45,14 @@ class B(object):
 		if i<self.s-1: neighbours.append((i+1,j))
 		if j>0: neighbours.append((i,j-1))
 		if j<self.s-1: neighbours.append((i,j+1))
+		return neighbours
+	def _get_neighbours_loose(self,i,j):
+		neighbours = []
+		neighbours += self._get_neighbours(i,j)
+		if i>0 and j>0: neighbours.append((i-1,j-1))
+		if i<self.s-1 and j>0: neighbours.append((i+1,j-1))
+		if i<self.s-1 and j<self.s-1: neighbours.append((i+1,j+1))
+		if i> 0 and j<self.s-1: neighbours.append((i-1,j+1))
 		return neighbours
 	def _get_cluster_neighbours(self,cluster):
 		n = []
@@ -138,7 +146,7 @@ INT_TO_COL = {0:'b',1:'w'}
 
 debug_ai = False
 
-def get_clusters(b,col):
+def get_clusters(b,col,loose=False):
 	clusters = []
 	remaining_cells = [(i,j) for i in range(b.s) for j in range(b.s)]
 	while remaining_cells:
@@ -146,25 +154,36 @@ def get_clusters(b,col):
 		if b[curr] != col:
 			remaining_cells.pop(0)
 			continue
-		conn = b._get_connections(*curr)
+		conn = b._get_connections(*curr,loose=loose)
 		for c in conn:
 			remaining_cells.pop(remaining_cells.index(c))
 		clusters.append(conn)
 	return clusters
 
-def heuristic(b,col,weights = [1.,1.,2.]):
+def scal(x,y):
+	return sum([a*b for a,b in zip(x,y)])
+
+def heuristic(b,col,weights = [0.5,1.5,1.,2.],ret_features=False):
 	col_int = COL_TO_INT[col]
 	own_clusters = get_clusters(b,col)
 	other_clusters = get_clusters(b,INT_TO_COL[(col_int+1)%2])
+	own_loose_clusters = get_clusters(b,col,loose=True)
+	other_loose_clusters = get_clusters(b,INT_TO_COL[(col_int+1)%2],loose=True)
 	own_neighbours = set([item for sublist in [b._get_cluster_neighbours(c) for c in own_clusters] for item in sublist])
 	other_neighbours = set([item for sublist in [b._get_cluster_neighbours(c) for c in other_clusters] for item in sublist])
 	n_clusters_own = float(len(own_clusters))
 	n_clusters_other = float(len(other_clusters))
+	n_loose_clusters_own = float(len(own_loose_clusters))
+	n_loose_clusters_other = float(len(other_loose_clusters))
 	n_own = float(len(reduce(lambda x,y:x+y,own_clusters,[])))
 	n_other = float(len(reduce(lambda x,y:x+y,other_clusters,[])))
 	n_liberties_own = float(len(own_neighbours))
 	n_liberties_other = float(len(other_neighbours))
-	return weights[0]*n_clusters_other/n_clusters_own + weights[1]*n_own/n_other + weights[2]*n_liberties_own/n_liberties_other
+	features = [n_clusters_other/n_clusters_own,n_loose_clusters_other/n_loose_clusters_own,n_own/n_other,n_liberties_own/n_liberties_other]
+	result = scal(weights,features)
+	if ret_features:
+		return (result,features)
+	return result
 
 class AI(object):
 	def __init__(self,board):
@@ -182,12 +201,12 @@ class AISimple(AI):
 			temp_board = B(self._board.s)
 			temp_board.b = self._board.b[:]
 			temp_board[c] = color
-			h = heuristic(temp_board,color)
+			h,features = heuristic(temp_board,color,ret_features=True)
 			if debug_ai:
 				print 'Evaluating move:'
 				print temp_board
 				print 'Heuristic:'
-				print h
+				print h,features
 			if h>max_h:
 				max_h = h
 				best_move = c
