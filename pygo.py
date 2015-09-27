@@ -179,8 +179,8 @@ WEIGHTS = {
 	'n_other':-1.,
 	'n_liberties_own':1.5,
 	'n_liberties_other':-1.5,
-	'n_own_eyes':3.,
-	'n_other_eyes':-3.,
+	'n_own_eyes':6.,
+	'n_other_eyes':-6.,
 }
 
 #TODO: add feature corresponding to number of clusters with only one liberty
@@ -233,22 +233,45 @@ class AI(object):
 	def decide(self,color):
 		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
 		return random.choice(available)
+	def simulate_move(self,board,move,color):
+		temp_board = B(board.s)
+		temp_board.b = board.b[:]
+		temp_board[move] = color
+		return temp_board
 
 class AISimple(AI):
+	def __init__(self,board):
+		self.max_calculations = 5000
+		super(AISimple,self).__init__(board)
+	def deep_search(self,heuristic,board,color,depth,color_move=None):
+		if depth==0: return heuristic(board,color)
+		col_int = COL_TO_INT[color]
+		other_color = INT_TO_COL[(col_int+1)%2]
+		if not color_move: color_move = other_color
+		col_move_int = COL_TO_INT[color_move]
+		other_color_move = INT_TO_COL[(col_move_int+1)%2]
+		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if board[i,j]=='']
+		optimum_h = -1e30 if color == color_move else 1e30
+		for c in available:
+			temp_board = self.simulate_move(board,c,color_move)
+			h = self.deep_search(heuristic,temp_board,color,depth-1,color_move=other_color_move)
+			if (h>optimum_h and color == color_move) or (h<optimum_h and color != color_move) :
+				optimum_h = h
+		return optimum_h
 	def decide(self,color):
 		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
 		best_move = available[0]
 		max_h = -1e30
 		for c in available:
-			temp_board = B(self._board.s)
-			temp_board.b = self._board.b[:]
-			temp_board[c] = color
-			h,features = heuristic(temp_board,color,ret_features=True)
-			if debug_ai:
-				print 'Evaluating move:'
-				print temp_board
-				print 'Heuristic:'
-				print h,features
+			temp_board = self.simulate_move(self._board,c,color)
+			depth = 2
+			h = self.deep_search(heuristic,temp_board,color,depth)
+			# h,features = heuristic(temp_board,color,ret_features=True)
+			# if debug_ai:
+			# 	print 'Evaluating move:'
+			# 	print temp_board
+			# 	print 'Heuristic:'
+			# 	print h,features
 			if h>max_h:
 				max_h = h
 				best_move = c
