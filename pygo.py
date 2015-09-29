@@ -4,6 +4,7 @@ class B(object):
 		self.b = ['']*s*s
 		self._VALUES = ('b','w')
 		self._last_move = None
+		self._is_over = False
 	def _getij(self,i,j):
 		assert i<self.s
 		assert j<self.s
@@ -67,6 +68,15 @@ class B(object):
 	def _remove_cluster(self,cluster):
 		for c in cluster:
 			self._setij(*c)
+	def _pass(self):
+		if not self._last_move:
+			self._is_over = True
+		self._last_move = None
+	def assess(self):
+		"""Decides winner
+		Returns dictionary with score for each player
+		{'b':10,'w':0}"""
+		raise NotImplementedError()
 	def _update(self):
 		remaining_cells = [(i,j) for i in range(self.s) for j in range(self.s)]
 		last_move_clust = []
@@ -95,6 +105,13 @@ class B(object):
 	def __repr__(self):
 		return self.__str__()
 
+class PassException(Exception):
+	pass
+class ExitException(Exception):
+	pass
+class GameOverException(Exception):
+	pass
+
 class Go(object):
 	def __init__(self,size=19,ai=False):
 		self.ai = ai
@@ -104,12 +121,17 @@ class Go(object):
 	def _play(self,ai):
 		if not ai:
 			coords = raw_input()
+			if coords == 'pass': raise PassException()
+			if coords == 'exit': raise ExitException()
 			i,j = self._parse_coords(coords)
 			i=int(i)
 			j=int(j)
 			return (i,j)
 		else:
 			decision = self._ai.decide('w')
+			if not decision:
+				print 'AI pass'
+				raise PassException()
 			print 'AI plays %s,%s'%decision
 			return decision
 	def _parse_coords(self,coords):
@@ -119,25 +141,34 @@ class Go(object):
 		print 'GO'
 		curr_player = 0
 		player_lookup = {0:'b',1:'w'}
-		while(True):
-			print self.b
-			not_moved = True
-			print '\nPlayer %s?'%str(curr_player+1)
+		try:
 			while(True):
-				try:
-					i,j = self._play(self.ai and curr_player)
-				except ValueError:
-					print 'Invalid entry. Use the format: x,y'
-					continue
-				try:
-					self.b[i,j] = player_lookup[curr_player]
-					break
-				except AssertionError:
-					print 'Invalid move'
-					continue
-
-			print '\n'
-			curr_player=(curr_player+1)%2
+				print self.b
+				not_moved = True
+				print '\nPlayer %s?'%str(curr_player+1)
+				while(True):
+					try:
+						i,j = self._play(self.ai and curr_player)
+					except ValueError:
+						print 'Invalid entry. Use the format: x,y'
+						continue
+					except PassException:
+						self.b._pass()
+						break
+					try:
+						self.b[i,j] = player_lookup[curr_player]
+						break
+					except AssertionError:
+						print 'Invalid move'
+						continue
+				print '\n'
+				if self.b._is_over:
+					raise GameOverException()
+				curr_player=(curr_player+1)%2
+		except ExitException:
+			print 'Game exited by user'
+		except GameOverException:
+			print 'Game is Over'
 
 import random
 
@@ -261,6 +292,7 @@ class AISimple(AI):
 	def decide(self,color):
 		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
 		best_move = available[0]
+		current_h = heuristic(self._board,color)
 		max_h = -1e30
 		for c in available:
 			temp_board = self.simulate_move(self._board,c,color)
@@ -276,4 +308,6 @@ class AISimple(AI):
 				max_h = h
 				best_move = c
 		print max_h
+		if max_h < current_h:
+			return
 		return best_move
