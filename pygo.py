@@ -1,7 +1,11 @@
+class InvalidMove(Exception):
+	pass
+
 class B(object):
 	def __init__(self,s):
 		self.s = s
 		self.b = ['']*s*s
+		self.history = [tuple(self.b[:])]
 		self._VALUES = ('b','w')
 		self._last_move = None
 		self._is_over = False
@@ -78,6 +82,7 @@ class B(object):
 		{'b':10,'w':0}"""
 		raise NotImplementedError()
 	def _update(self):
+		board_save = self.b[:]
 		remaining_cells = [(i,j) for i in range(self.s) for j in range(self.s)]
 		last_move_clust = []
 		while remaining_cells:
@@ -95,6 +100,10 @@ class B(object):
 				self._remove_cluster(conn)
 		if self._is_cornered(last_move_clust):
 			self._remove_cluster(last_move_clust)
+		if tuple(self.b) in self.history:
+			self.b = board_save
+			raise InvalidMove()
+		self.history.append(tuple(self.b[:]))
 	def __str__(self):
 		lookup = {'':' ','b':'x','w':'o'}
 		table = [[lookup[self._getij(i,j)] for j in range(self.s)] for i in range(self.s)]
@@ -158,7 +167,7 @@ class Go(object):
 					try:
 						self.b[i,j] = player_lookup[curr_player]
 						break
-					except AssertionError:
+					except (AssertionError, InvalidMove):
 						print 'Invalid move'
 						continue
 				print '\n'
@@ -284,18 +293,24 @@ class AISimple(AI):
 		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if board[i,j]=='']
 		optimum_h = -1e30 if color == color_move else 1e30
 		for c in available:
-			temp_board = self.simulate_move(board,c,color_move)
+			try:
+				temp_board = self.simulate_move(board,c,color_move)
+			except InvalidMove:
+				continue
 			h = self.deep_search(heuristic,temp_board,color,depth-1,color_move=other_color_move)
 			if (h>optimum_h and color == color_move) or (h<optimum_h and color != color_move) :
 				optimum_h = h
 		return optimum_h
 	def decide(self,color):
 		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
-		best_move = available[0]
+		best_move = None
 		current_h = heuristic(self._board,color)
 		max_h = -1e30
 		for c in available:
-			temp_board = self.simulate_move(self._board,c,color)
+			try:
+				temp_board = self.simulate_move(self._board,c,color)
+			except InvalidMove:
+				continue
 			depth = 2
 			h = self.deep_search(heuristic,temp_board,color,depth)
 			# h,features = heuristic(temp_board,color,ret_features=True)
