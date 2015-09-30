@@ -183,7 +183,11 @@ class Go(object):
 		except ExitException:
 			print 'Game exited by user'
 		except GameOverException:
+			result = self.b.assess(full_result=True)
 			print 'Game is Over'
+			print 'Winner: ' + result[0]
+			print 'Score: ' + str(result[1])
+			return result
 
 import random
 
