@@ -76,11 +76,17 @@ class B(object):
 		if not self._last_move:
 			self._is_over = True
 		self._last_move = None
-	def assess(self):
+	def assess(self,full_result=False):
 		"""Decides winner
-		Returns dictionary with score for each player
+		Returns winner and dictionary with score for each player if :full_result is true
 		{'b':10,'w':0}"""
-		raise NotImplementedError()
+		b_score = sum([x=='b' for x in self.b])
+		w_score = sum([x=='w' for x in self.b])
+		winner = ''
+		if b_score>w_score: winner = 'b'
+		elif w_score>b_score: winner = 'w'
+		if full_result: winner = (winner,{'b':b_score,'w':w_score})
+		return winner
 	def _update(self):
 		board_save = self.b[:]
 		remaining_cells = [(i,j) for i in range(self.s) for j in range(self.s)]
@@ -122,9 +128,9 @@ class GameOverException(Exception):
 	pass
 
 class Go(object):
-	def __init__(self,size=19,ai=False):
+	def __init__(self,size=19,ai=False,board=None):
 		self.ai = ai
-		self.b = B(size)
+		self.b = B(size) if not board else board
 		if ai: self._ai = AISimple(self.b)
 		self.start()
 	def _play(self,ai):
@@ -276,6 +282,7 @@ class AI(object):
 	def simulate_move(self,board,move,color):
 		temp_board = B(board.s)
 		temp_board.b = board.b[:]
+		temp_board.history = board.history[:]
 		temp_board[move] = color
 		return temp_board
 
@@ -326,3 +333,7 @@ class AISimple(AI):
 		if max_h < current_h:
 			return
 		return best_move
+
+# The following is for debug
+study_case = B(5)
+study_case.b = ['','w','b','b','b','w','','b','','b','','b','b','b','b','w','b','w','b','w','','w','','w','']
