@@ -131,7 +131,7 @@ class Go(object):
 	def __init__(self,size=19,ai=False,board=None):
 		self.ai = ai
 		self.b = B(size) if not board else board
-		if ai: self._ai = AISimple(self.b)
+		if ai: self._ai = AISimple(self.b,pruning=4,depth=3)
 		self.start()
 	def _play(self,ai):
 		if not ai:
@@ -231,6 +231,8 @@ WEIGHTS = {
 	'n_liberties_other':-1.5,
 	'n_own_eyes':6.,
 	'n_other_eyes':-6.,
+	'own_low_liberty_clusters':-3.,
+	'other_low_liberty_clusters':4.
 }
 
 #TODO: add feature corresponding to number of clusters with only one liberty
@@ -242,6 +244,8 @@ def heuristic(b,col,weights = WEIGHTS,ret_features=False):
 	other_clusters = get_clusters(b,other_col)
 	own_loose_clusters = get_clusters(b,col,loose=True)
 	other_loose_clusters = get_clusters(b,other_col,loose=True)
+	own_cluster_neighbours = [set(b._get_cluster_neighbours(c)) for c in own_clusters]
+	other_cluster_neighbours = [set(b._get_cluster_neighbours(c)) for c in other_clusters]
 	own_neighbours = set([item for sublist in [b._get_cluster_neighbours(c) for c in own_clusters] for item in sublist])
 	other_neighbours = set([item for sublist in [b._get_cluster_neighbours(c) for c in other_clusters] for item in sublist])
 	own_eyes = get_eyes(b,col)
@@ -256,6 +260,8 @@ def heuristic(b,col,weights = WEIGHTS,ret_features=False):
 	n_liberties_other = float(len(other_neighbours))
 	n_own_eyes = float(len(own_eyes))
 	n_other_eyes = float(len(other_eyes))
+	own_low_liberty_clusters = sum([len(c)*1./len(n) for c,n in zip(own_clusters,own_cluster_neighbours)])
+	other_low_liberty_clusters = sum([len(c)*1./len(n) for c,n in zip(other_clusters,other_cluster_neighbours)])
 	features = {
 		'n_clusters_own':n_clusters_own,
 		'n_clusters_other':n_clusters_other,
@@ -267,6 +273,8 @@ def heuristic(b,col,weights = WEIGHTS,ret_features=False):
 		'n_liberties_other':n_liberties_other,
 		'n_own_eyes':n_own_eyes,
 		'n_other_eyes':n_other_eyes,
+		'own_low_liberty_clusters':own_low_liberty_clusters,
+		'other_low_liberty_clusters':other_low_liberty_clusters
 	}
 	# features = [n_clusters_other/n_clusters_own,n_loose_clusters_other/n_loose_clusters_own,n_own/n_other,n_liberties_own/n_liberties_other,n_own_eyes,n_other_eyes]
 
@@ -291,8 +299,10 @@ class AI(object):
 		return temp_board
 
 class AISimple(AI):
-	def __init__(self,board):
+	def __init__(self,board,pruning=4,depth=2):
 		self.max_calculations = 5000
+		self.pruning = pruning
+		self.depth = depth
 		super(AISimple,self).__init__(board)
 	def deep_search(self,heuristic,board,color,depth,color_move=None):
 		if depth==0: return heuristic(board,color)
@@ -303,6 +313,19 @@ class AISimple(AI):
 		other_color_move = INT_TO_COL[(col_move_int+1)%2]
 		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if board[i,j]=='']
 		optimum_h = -1e30 if color == color_move else 1e30
+		if self.pruning:
+			hlist = []
+			suboptimum_h = optimum_h
+			for c in available:
+				try:
+					temp_board = self.simulate_move(board,c,color_move)
+				except InvalidMove:
+
+					continue
+				h = heuristic(temp_board,color)
+				hlist.append((h,c))
+			hlist.sort(reverse=True)
+			available = [x[1] for x in hlist][min(self.pruning,len(hlist)):]
 		for c in available:
 			try:
 				temp_board = self.simulate_move(board,c,color_move)
