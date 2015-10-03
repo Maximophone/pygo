@@ -127,68 +127,6 @@ class ExitException(Exception):
 class GameOverException(Exception):
 	pass
 
-class Go(object):
-	def __init__(self,size=19,ai=False,board=None):
-		self.ai = ai
-		self.b = B(size) if not board else board
-		if ai: self._ai = AISimple(self.b,pruning=4,depth=3)
-		self.start()
-	def _play(self,ai):
-		if not ai:
-			coords = raw_input()
-			if coords == 'pass': raise PassException()
-			if coords == 'exit': raise ExitException()
-			i,j = self._parse_coords(coords)
-			i=int(i)
-			j=int(j)
-			return (i,j)
-		else:
-			decision = self._ai.decide('w')
-			if not decision:
-				print 'AI pass'
-				raise PassException()
-			print 'AI plays %s,%s'%decision
-			return decision
-	def _parse_coords(self,coords):
-		i,j = coords.split(',')
-		return (i,j)
-	def start(self):
-		print 'GO'
-		curr_player = 0
-		player_lookup = {0:'b',1:'w'}
-		try:
-			while(True):
-				print self.b
-				not_moved = True
-				print '\nPlayer %s?'%str(curr_player+1)
-				while(True):
-					try:
-						i,j = self._play(self.ai and curr_player)
-					except ValueError:
-						print 'Invalid entry. Use the format: x,y'
-						continue
-					except PassException:
-						self.b._pass()
-						break
-					try:
-						self.b[i,j] = player_lookup[curr_player]
-						break
-					except (AssertionError, InvalidMove):
-						print 'Invalid move'
-						continue
-				print '\n'
-				if self.b._is_over:
-					raise GameOverException()
-				curr_player=(curr_player+1)%2
-		except ExitException:
-			print 'Game exited by user'
-		except GameOverException:
-			result = self.b.assess(full_result=True)
-			print 'Game is Over'
-			print 'Winner: ' + result[0]
-			print 'Score: ' + str(result[1])
-			return result
-
 import random
 
 COL_TO_INT = {'b':0,'w':1}
@@ -285,11 +223,26 @@ def heuristic(b,col,weights = WEIGHTS,ret_features=False):
 		return (result,features)
 	return result
 
-class AI(object):
-	def __init__(self,board):
-		self._board = board
-	def decide(self,color):
-		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
+class Player(object):
+	def __init__(self,name):
+		self.name=name
+
+class Human(Player):
+	def decide(self,board,color):
+		coords = raw_input()
+		if coords == 'pass': return None
+		if coords == 'exit': raise ExitException()
+		i,j = self._parse_coords(coords)
+		i=int(i)
+		j=int(j)
+		return (i,j)
+	def _parse_coords(self,coords):
+		i,j = coords.split(',')
+		return (i,j)
+
+class AI(Player):
+	def decide(self,board,color):
+		available = [(i,j) for i in range(board.s) for j in range(board.s) if board[i,j]=='']
 		return random.choice(available)
 	def simulate_move(self,board,move,color):
 		temp_board = B(board.s)
@@ -299,11 +252,10 @@ class AI(object):
 		return temp_board
 
 class AISimple(AI):
-	def __init__(self,board,pruning=4,depth=2):
-		self.max_calculations = 5000
+	def __init__(self,name,pruning=4,depth=2):
 		self.pruning = pruning
 		self.depth = depth
-		super(AISimple,self).__init__(board)
+		super(AISimple,self).__init__(name)
 	def deep_search(self,heuristic,board,color,depth,color_move=None):
 		if depth==0: return heuristic(board,color)
 		col_int = COL_TO_INT[color]
@@ -311,21 +263,19 @@ class AISimple(AI):
 		if not color_move: color_move = other_color
 		col_move_int = COL_TO_INT[color_move]
 		other_color_move = INT_TO_COL[(col_move_int+1)%2]
-		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if board[i,j]=='']
+		available = [(i,j) for i in range(board.s) for j in range(board.s) if board[i,j]=='']
 		optimum_h = -1e30 if color == color_move else 1e30
 		if self.pruning:
 			hlist = []
-			suboptimum_h = optimum_h
 			for c in available:
 				try:
 					temp_board = self.simulate_move(board,c,color_move)
 				except InvalidMove:
-
 					continue
 				h = heuristic(temp_board,color)
 				hlist.append((h,c))
 			hlist.sort(reverse=True)
-			available = [x[1] for x in hlist][min(self.pruning,len(hlist)):]
+			available = [x[1] for x in hlist][:min(self.pruning,len(hlist))]
 		for c in available:
 			try:
 				temp_board = self.simulate_move(board,c,color_move)
@@ -335,14 +285,14 @@ class AISimple(AI):
 			if (h>optimum_h and color == color_move) or (h<optimum_h and color != color_move) :
 				optimum_h = h
 		return optimum_h
-	def decide(self,color):
-		available = [(i,j) for i in range(self._board.s) for j in range(self._board.s) if self._board[i,j]=='']
+	def decide(self,board,color):
+		available = [(i,j) for i in range(board.s) for j in range(board.s) if board[i,j]=='']
 		best_move = None
-		current_h = heuristic(self._board,color)
+		current_h = heuristic(board,color)
 		max_h = -1e30
 		for c in available:
 			try:
-				temp_board = self.simulate_move(self._board,c,color)
+				temp_board = self.simulate_move(board,c,color)
 			except InvalidMove:
 				continue
 			depth = 2
@@ -360,6 +310,60 @@ class AISimple(AI):
 		if max_h < current_h:
 			return
 		return best_move
+
+
+class Go(object):
+	def __init__(self,size=19,player1=Human('Bob'),player2=AISimple('Bill'),board=None,display_on=True):
+		self.players = [player1,player2]
+		self.display_on = display_on
+		self.b = B(size) if not board else board
+		self.start()
+	def display(self,text):
+		if self.display_on: print text
+	def _play(self,pid):
+		player = self.players[pid]
+		decision = player.decide(self.b,'w')
+		if not decision:
+			self.display('%s pass'%player.name)
+			raise PassException()
+		self.display('%s plays %s,%s'%(player.name,decision[0],decision[1]))
+		return decision
+	def start(self):
+		self.display('GO')
+		curr_player = 0
+		color_lookup = {0:'b',1:'w'}
+		try:
+			while(True):
+				print self.b
+				not_moved = True
+				print '\nPlayer %s?'%str(curr_player+1)
+				while(True):
+					try:
+						i,j = self._play(curr_player)
+					except ValueError:
+						print 'Invalid entry. Use the format: x,y'
+						continue
+					except PassException:
+						self.b._pass()
+						break
+					try:
+						self.b[i,j] = color_lookup[curr_player]
+						break
+					except (AssertionError, InvalidMove):
+						print 'Invalid move'
+						continue
+				print '\n'
+				if self.b._is_over:
+					raise GameOverException()
+				curr_player=(curr_player+1)%2
+		except ExitException:
+			print 'Game exited by user'
+		except GameOverException:
+			result = self.b.assess(full_result=True)
+			print 'Game is Over'
+			print 'Winner: ' + result[0]
+			print 'Score: ' + str(result[1])
+			return result
 
 # The following is for debug
 study_case = B(5)
