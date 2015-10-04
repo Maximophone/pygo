@@ -46,3 +46,12 @@ def extract_features(board):
 		'low_liberty_clusters':low_liberty_clusters
 	}
 	return features
+
+naive_weights = {
+	'n_clusters':[-1.5,1.5],
+	'n_loose_clusters':[-1.5,1.5],
+	'n_stones':[1.,-1.],
+	'n_liberties':[1.5,-1.5],
+	'n_eyes':[6.,-6.],
+	'low_liberty_clusters':[-3.,4.]
+}
