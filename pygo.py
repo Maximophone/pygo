@@ -9,13 +9,13 @@ class GameOverException(Exception):
 	pass
 
 class Go(object):
-	def __init__(self,size=19,player1=Human('Bob'),player2=AISimple('Bill'),board=None,display_on=True):
+	def __init__(self,size=19,player1=Human('Bob'),player2=AIMinimax('Bill'),board=None,display_on=True,auto_start=True):
 		self.players = [player1,player2]
 		self.display_on = display_on
 		self.b = Board(size) if not board else board
 		self.color_lookup = {0:'b',1:'w'}
 		self.pid_lookup = {'b':0,'w':1}
-		self.start()
+		if auto_start: self.start()
 	def display(self,text):
 		if self.display_on: print text
 	def _play(self,pid):
@@ -57,7 +57,7 @@ class Go(object):
 			self.display('Game exited by user')
 		except GameOverException:
 			result = self.b.assess(full_result=True)
-			print 'Game is Over'
+			self.display('Game is Over')
 			if result[0] == '': self.display('Draw')
 			else: self.display('Winner: ' + self.players[self.pid_lookup[result[0]]].name)
 			self.display('Score: ' + str(result[1]))
