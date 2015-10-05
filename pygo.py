@@ -1,7 +1,7 @@
 from core._board import Board, InvalidMoveException
 from core._features import extract_features
 from core._player import Human, ExitException
-from core._ai import AISimple
+from core._ai import AISimple, AIMinimax
 
 class PassException(Exception):
 	pass
