@@ -114,7 +114,7 @@ def argmax(function,index,ret_value=False):
 	return idx_max
 
 class AIMinimax(AI):
-	def __init__(self,name,depth=2,extract_features=extract_features,weights=naive_weights):
+	def __init__(self,name,depth=1,extract_features=extract_features,weights=naive_weights):
 		self.depth = depth
 		self.extract_features = extract_features
 		self.weights = weights
@@ -129,25 +129,12 @@ class AIMinimax(AI):
 				continue
 	def _decide(self,board,col,depth):
 		ncol = (col+1)%2
-		if debug_ai: print 'deciding best move...'
 		available_moves = list(self._available(board,col))
-		if not available_moves: return None
 		best_move = argmax(lambda x: self._score(x[1],col,ncol,depth),available_moves)
 		return best_move
 	def _score(self,board,col,col_turn,depth):
-		if debug_ai:
-			print 'Scoring board:'
-			print board
-			print 'for color: ' + _INT_TO_COL[col]
-			print 'next turn: ' + _INT_TO_COL[col_turn]
 		if depth==0:
-			h,features = heuristic(board,_INT_TO_COL[col],self.extract_features,self.weights,ret_features=True)
-			if debug_ai:
-				print 'heuristic: ' + str(h)
-				print 'from features:'
-				print features
-			return h
-			# return heuristic(board,_INT_TO_COL[col],self.extract_features,self.weights)
+			return heuristic(board,_INT_TO_COL[col],self.extract_features,self.weights)
 		ncol_turn = (col_turn+1)%2
 		available_moves = self._available(board,col)
 		if col==col_turn:
@@ -155,10 +142,7 @@ class AIMinimax(AI):
 		else:
 			return min([self._score(b,col,ncol_turn,depth-1) for c,b in available_moves])
 	def decide(self,board,color):
-		# import ipdb
-		# ipdb.set_trace()
 		col = _COL_TO_INT[color]
 		move = self._decide(board,col,self.depth)
-		print move
 		if move is not None: return move[0]
 		return None
