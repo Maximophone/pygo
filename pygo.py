@@ -3,6 +3,9 @@ from core._features import extract_features
 from core._player import Human, ExitException
 from core._ai import AISimple, AIMinimax
 
+__version__ = 'v1.0.0'
+__author__ = 'Maxime Fournes'
+
 class PassException(Exception):
 	pass
 class GameOverException(Exception):
